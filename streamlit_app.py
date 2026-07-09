@@ -7,6 +7,20 @@ import xgboost as xgb
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+import requests
+
+def get_usd_to_gbp():
+    """Fetch live USD to GBP exchange rate."""
+    try:
+        url = "https://api.exchangerate-api.com/v4/latest/USD"
+        response = requests.get(url)
+        data = response.json()
+        return data['rates']['GBP']
+    except:
+        return 0.80  # Fallback rate
+
+usd_to_gbp = get_usd_to_gbp()
+
 # Page configuration
 st.set_page_config(
     page_title="Gold Price Predictor",
@@ -88,14 +102,14 @@ col1, col2 = st.columns(2)
 with col1:
     st.metric(
         label="Current Gold Price",
-        value=f"${current_price:,.2f}",
+        value=f"£{current_price:,.2f}",
         delta=None
     )
     
     st.metric(
         label="Predicted Price (Next Day)",
-        value=f"${predicted_price:,.2f}",
-        delta=f"${predicted_price - current_price:,.2f}",
+        value=f"£{predicted_price:,.2f}",
+        delta=f"£{predicted_price - current_price:,.2f}",
         delta_color="normal"
     )
     
@@ -178,6 +192,6 @@ with col5:
     bb_position = "Upper Band" if current_price > latest_bb_upper else "Lower Band" if current_price < latest_bb_lower else "Middle"
     st.metric(
         label="Bollinger Bands",
-        value=f"${current_price:,.2f}",
+        value=f"£{current_price:,.2f}",
         delta=bb_position
     )
