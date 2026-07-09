@@ -6,42 +6,52 @@ from datetime import datetime, timedelta
 import xgboost as xgb
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-
 import requests
 
-def get_usd_to_gbp():
-    """Fetch live USD to GBP exchange rate."""
-    try:
-        url = "https://api.exchangerate-api.com/v4/latest/USD"
-        response = requests.get(url)
-        data = response.json()
-        return data['rates']['GBP']
-    except:
-        return 0.80  # Fallback rate
-
-usd_to_gbp = get_usd_to_gbp()
-
+# ----------------------------------------------
 # Page configuration
+# ----------------------------------------------
 st.set_page_config(
     page_title="Gold Price Predictor",
     page_icon="📈",
     layout="wide"
 )
 
-# Title
 st.title("📈 Gold Price Prediction Dashboard")
 st.markdown("**AI-powered gold price prediction and trading signals**")
 
+# ----------------------------------------------
+# Exchange rate function
+# ----------------------------------------------
+def get_usd_to_gbp():
+    """Fetch live USD to GBP exchange rate."""
+    try:
+        url = "https://api.frankfurter.app/latest?from=USD&to=GBP"
+        response = requests.get(url)
+        data = response.json()
+        return data['rates']['GBP']
+    except Exception as e:
+        st.warning(f"Exchange rate API failed: {e}. Using fallback rate 0.80.")
+        return 0.80  # Fallback rate
+
+# ----------------------------------------------
 # Load model
+# ----------------------------------------------
 @st.cache_resource
 def load_model():
     model = xgb.XGBRegressor()
     model.load_model('xgboost_gold_model.json')
     return model
 
-model = load_model()
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Error loading model: {e}")
+    st.stop()
 
-# Function to calculate indicators
+# ----------------------------------------------
+# Technical indicator function
+# ----------------------------------------------
 def calculate_indicators(df):
     df = df.copy()
     df['SMA_20'] = df['Close'].rolling(window=20).mean()
@@ -67,7 +77,9 @@ def calculate_indicators(df):
     
     return df
 
-# Function to get prediction
+# ----------------------------------------------
+# Fetch data and make prediction
+# ----------------------------------------------
 def get_prediction():
     end_date = datetime.now()
     start_date = end_date - timedelta(days=100)
@@ -89,30 +101,44 @@ def get_prediction():
     
     return current, pred, data, latest
 
+# ----------------------------------------------
+# Get exchange rate
+# ----------------------------------------------
+usd_to_gbp = get_usd_to_gbp()
+
+# ----------------------------------------------
 # Get prediction
+# ----------------------------------------------
 current_price, predicted_price, historical_data, latest_data = get_prediction()
 
 if current_price is None:
     st.error("❌ Not enough data to make a prediction. Please try again later.")
     st.stop()
 
-# Layout: Two columns
+# Convert prices to GBP
+current_price_gbp = current_price * usd_to_gbp
+predicted_price_gbp = predicted_price * usd_to_gbp
+
+# ----------------------------------------------
+# Layout: Two columns for metrics
+# ----------------------------------------------
 col1, col2 = st.columns(2)
 
 with col1:
     st.metric(
-        label="Current Gold Price",
-        value=f"£{current_price:,.2f}",
+        label="Current Gold Price (GBP)",
+        value=f"£{current_price_gbp:,.2f}",
         delta=None
     )
     
     st.metric(
         label="Predicted Price (Next Day)",
-        value=f"£{predicted_price:,.2f}",
-        delta=f"£{predicted_price - current_price:,.2f}",
+        value=f"£{predicted_price_gbp:,.2f}",
+        delta=f"£{predicted_price_gbp - current_price_gbp:,.2f}",
         delta_color="normal"
     )
-    
+
+with col2:
     # Signal
     signal = "BUY" if predicted_price > current_price else "SELL"
     color = "green" if signal == "BUY" else "red"
@@ -123,7 +149,6 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
     
-    # Confidence
     confidence = abs(predicted_price - current_price) / current_price * 100
     st.metric(
         label="Confidence",
@@ -131,38 +156,46 @@ with col1:
         delta=None
     )
 
-with col2:
-    # Price chart
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=historical_data.index,
-        y=historical_data['Close'],
-        mode='lines',
-        name='Actual Price',
-        line=dict(color='gold', width=2)
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=[historical_data.index[-1], historical_data.index[-1] + timedelta(days=1)],
-        y=[current_price, predicted_price],
-        mode='lines+markers',
-        name='Predicted Price',
-        line=dict(color='blue', width=2, dash='dash'),
-        marker=dict(size=10)
-    ))
-    
-    fig.update_layout(
-        title='Gold Price: Actual vs Predicted',
-        xaxis_title='Date',
-        yaxis_title='Price (USD)',
-        height=400,
-        template='plotly_dark'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+# ----------------------------------------------
+# Price chart
+# ----------------------------------------------
+st.subheader("📊 Gold Price: Actual vs Predicted")
 
+fig = go.Figure()
+
+# Historical prices in GBP
+historical_close_gbp = historical_data['Close'] * usd_to_gbp
+
+fig.add_trace(go.Scatter(
+    x=historical_data.index,
+    y=historical_close_gbp,
+    mode='lines',
+    name='Actual Price',
+    line=dict(color='gold', width=2)
+))
+
+# Predicted price (next day)
+fig.add_trace(go.Scatter(
+    x=[historical_data.index[-1], historical_data.index[-1] + timedelta(days=1)],
+    y=[current_price_gbp, predicted_price_gbp],
+    mode='lines+markers',
+    name='Predicted Price',
+    line=dict(color='blue', width=2, dash='dash'),
+    marker=dict(size=10)
+))
+
+fig.update_layout(
+    xaxis_title='Date',
+    yaxis_title='Price (GBP)',
+    height=400,
+    template='plotly_dark'
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# ----------------------------------------------
 # Technical Indicators
+# ----------------------------------------------
 st.subheader("📊 Technical Indicators")
 st.markdown("Key technical indicators used by the model")
 
@@ -170,20 +203,21 @@ col3, col4, col5 = st.columns(3)
 
 with col3:
     latest_rsi = latest_data['RSI_14'].values[0] if not pd.isna(latest_data['RSI_14'].values[0]) else 50
+    rsi_status = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
     st.metric(
         label="RSI (14)",
         value=f"{latest_rsi:.2f}",
-        delta="Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
+        delta=rsi_status
     )
 
 with col4:
     latest_macd = latest_data['MACD'].values[0] if not pd.isna(latest_data['MACD'].values[0]) else 0
     latest_signal = latest_data['MACD_Signal'].values[0] if not pd.isna(latest_data['MACD_Signal'].values[0]) else 0
-    macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
+    macd_status = "Bullish" if latest_macd > latest_signal else "Bearish"
     st.metric(
         label="MACD",
         value=f"{latest_macd:.2f}",
-        delta=macd_signal
+        delta=macd_status
     )
 
 with col5:
@@ -192,6 +226,12 @@ with col5:
     bb_position = "Upper Band" if current_price > latest_bb_upper else "Lower Band" if current_price < latest_bb_lower else "Middle"
     st.metric(
         label="Bollinger Bands",
-        value=f"£{current_price:,.2f}",
+        value=f"£{current_price_gbp:,.2f}",
         delta=bb_position
     )
+
+# ----------------------------------------------
+# Footer
+# ----------------------------------------------
+st.markdown("---")
+st.caption("Data sourced from Yahoo Finance. Predictions are for educational purposes only. Not financial advice.")
