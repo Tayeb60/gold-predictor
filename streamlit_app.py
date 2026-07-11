@@ -104,17 +104,18 @@ def calculate_indicators(df):
 # ----------------------------------------------
     import requests
 
+import requests
+
 def fetch_gold_data():
-    """Fetch fresh gold data from Alpha Vantage (live)."""
-    API_KEY = "EXGT5CN5GCG589JY" 
-    url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey={API_KEY}"
-    
+    """Fetch live gold price from a reliable free API."""
     try:
-        response = requests.get(url)
-        data = response.json()
-        current_price = float(data['Realtime Currency Exchange Rate']['5. Exchange Rate'])
+        # Get live gold price in USD from a free API
+        gold_url = "https://api.gold-api.com/price/XAU"
+        response = requests.get(gold_url)
+        gold_data = response.json()
+        current_price = float(gold_data['price'])
         
-        # For prediction, we still need historical data. Keep using yfinance for that.
+        # For historical data and prediction, still use Yahoo Finance
         end_date = datetime.now()
         start_date = end_date - timedelta(days=100)
         gold = yf.Ticker("GC=F")
@@ -133,7 +134,7 @@ def fetch_gold_data():
         X = latest[features].values
         pred = model.predict(X)[0]
         
-        # Use the live price from Alpha Vantage
+        # Use the live price from the API
         current = current_price
         
         return current, pred, historical, latest
@@ -141,6 +142,7 @@ def fetch_gold_data():
     except Exception as e:
         st.error(f"Error fetching live price: {e}")
         return None, None, None, None
+   
 # ----------------------------------------------
 # Display last update time
 # ----------------------------------------------
