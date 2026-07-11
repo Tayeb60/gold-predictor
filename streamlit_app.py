@@ -103,37 +103,45 @@ def calculate_indicators(df):
 # Fetch data and make prediction (NO CACHING)
 # ----------------------------------------------
 def fetch_gold_data():
-    """Fetch fresh gold data from Yahoo Finance (no caching)."""
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=100)
-    gold = yf.Ticker("GC=F")
-    
-    # Force fresh data
-    data = gold.history(
-        start=start_date, 
-        end=end_date, 
-        interval="1d",
-        auto_adjust=False
-    )
-    
-    # Remove duplicate indices if any
-    data = data[~data.index.duplicated(keep='last')]
-    
-    if len(data) < 50:
-        return None, None, None, None
-    
-    data = calculate_indicators(data)
-    latest = data.iloc[-1:].copy()
-    
-    features = ['SMA_20', 'SMA_50', 'EMA_20', 'RSI_14', 'MACD', 
-                'MACD_Signal', 'MACD_Histogram', 'BB_Upper', 'BB_Lower', 'BB_Middle']
-    
-    X = latest[features].values
-    pred = model.predict(X)[0]
-    current = latest['Close'].values[0]
-    
-    return current, pred, data, latest
+    import requests
 
+def fetch_gold_data():
+    """Fetch fresh gold data from Alpha Vantage (live)."""
+    API_KEY = "EXGT5CN5GCG589JY." 
+    url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey={API_KEY}"
+    
+    try:
+        response = requests.get(url)
+        data = response.json()
+        current_price = float(data['Realtime Currency Exchange Rate']['5. Exchange Rate'])
+        
+        # For prediction, we still need historical data. Keep using yfinance for that.
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=100)
+        gold = yf.Ticker("GC=F")
+        historical = gold.history(start=start_date, end=end_date, interval="1d", auto_adjust=False)
+        historical = historical[~historical.index.duplicated(keep='last')]
+        
+        if len(historical) < 50:
+            return None, None, None, None
+        
+        historical = calculate_indicators(historical)
+        latest = historical.iloc[-1:].copy()
+        
+        features = ['SMA_20', 'SMA_50', 'EMA_20', 'RSI_14', 'MACD', 
+                    'MACD_Signal', 'MACD_Histogram', 'BB_Upper', 'BB_Lower', 'BB_Middle']
+        
+        X = latest[features].values
+        pred = model.predict(X)[0]
+        
+        # Use the live price from Alpha Vantage
+        current = current_price
+        
+        return current, pred, historical, latest
+        
+    except Exception as e:
+        st.error(f"Error fetching live price: {e}")
+        return None, None, None, None
 # ----------------------------------------------
 # Display last update time
 # ----------------------------------------------
