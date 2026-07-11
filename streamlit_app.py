@@ -21,9 +21,30 @@ st.title("📈 Gold Price Prediction Dashboard")
 st.markdown("**AI-powered gold price prediction and trading signals**")
 
 # ----------------------------------------------
-# Exchange rate function
+# Force refresh using query param
 # ----------------------------------------------
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+if "refresh" in st.query_params:
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    # Remove the query param to avoid infinite loop
+    st.query_params.clear()
+
+# ----------------------------------------------
+# Manual refresh button with full page reload
+# ----------------------------------------------
+col_refresh = st.columns([1, 5])
+with col_refresh[0]:
+    if st.button("🔄 Refresh Data"):
+        # Use a query param to trigger a full page reload with cache clear
+        st.markdown(
+            '<meta http-equiv="refresh" content="0; url=?refresh=true">',
+            unsafe_allow_html=True
+        )
+        st.stop()
+
+# ----------------------------------------------
+# Exchange rate function (no caching)
+# ----------------------------------------------
 def get_usd_to_gbp():
     """Fetch live USD to GBP exchange rate."""
     try:
@@ -33,7 +54,7 @@ def get_usd_to_gbp():
         return data['rates']['GBP']
     except Exception as e:
         st.warning(f"Exchange rate API failed: {e}. Using fallback rate 0.80.")
-        return 0.80  # Fallback rate
+        return 0.80
 
 # ----------------------------------------------
 # Load model
@@ -79,16 +100,15 @@ def calculate_indicators(df):
     return df
 
 # ----------------------------------------------
-# Fetch data and make prediction (with cache clearing)
+# Fetch data and make prediction (NO CACHING)
 # ----------------------------------------------
-@st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_gold_data():
-    """Fetch fresh gold data from Yahoo Finance."""
+    """Fetch fresh gold data from Yahoo Finance (no caching)."""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=100)
     gold = yf.Ticker("GC=F")
     
-    # Force fresh data by disabling auto_adjust and using interval
+    # Force fresh data
     data = gold.history(
         start=start_date, 
         end=end_date, 
@@ -115,13 +135,10 @@ def fetch_gold_data():
     return current, pred, data, latest
 
 # ----------------------------------------------
-# Manual refresh button
+# Display last update time
 # ----------------------------------------------
-col_refresh = st.columns([1, 5])
-with col_refresh[0]:
-    if st.button("🔄 Refresh Data"):
-        st.cache_data.clear()
-        st.rerun()
+update_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+st.caption(f"🕒 Last updated: {update_time}")
 
 # ----------------------------------------------
 # Get exchange rate
@@ -140,11 +157,6 @@ if current_price is None:
 # Convert prices to GBP
 current_price_gbp = current_price * usd_to_gbp
 predicted_price_gbp = predicted_price * usd_to_gbp
-
-# ----------------------------------------------
-# Display last update time
-# ----------------------------------------------
-st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ----------------------------------------------
 # Layout: Two columns for metrics
