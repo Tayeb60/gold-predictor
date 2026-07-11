@@ -107,7 +107,7 @@ def fetch_gold_data():
 
 def fetch_gold_data():
     """Fetch fresh gold data from Alpha Vantage (live)."""
-    API_KEY = "EXGT5CN5GCG589JY." 
+    API_KEY = "EXGT5CN5GCG589JY" 
     url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey={API_KEY}"
     
     try:
