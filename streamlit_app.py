@@ -102,7 +102,6 @@ def calculate_indicators(df):
 # ----------------------------------------------
 # Fetch data and make prediction (NO CACHING)
 # ----------------------------------------------
-def fetch_gold_data():
     import requests
 
 def fetch_gold_data():
